@@ -1,0 +1,87 @@
+[
+  {
+    "model": "payments.plan",
+    "pk": "9de5cf87-540d-4f61-9334-e1f398e92b49",
+    "fields": {
+      "name": "Free",
+      "tier": "free",
+      "tier_rank": 0,
+      "billing_cycle": "",
+      "amount": "0.00",
+      "currency": "LKR",
+      "payhere_recurrence": "",
+      "payhere_duration": "",
+      "features": { "max_users": 1, "storage_gb": 1, "api_calls": 100 },
+      "is_active": true,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "payments.plan",
+    "pk": "e43aa9f2-eeae-4e4b-9539-fb31e95b16b3",
+    "fields": {
+      "name": "Pro Monthly",
+      "tier": "pro",
+      "tier_rank": 1,
+      "billing_cycle": "monthly",
+      "amount": "2500.00",
+      "currency": "LKR",
+      "payhere_recurrence": "1 Month",
+      "payhere_duration": "Forever",
+      "features": { "max_users": 10, "storage_gb": 50, "api_calls": 10000 },
+      "is_active": true,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "payments.plan",
+    "pk": "d58fcb63-aa98-4a79-bcf6-54b77c22de3d",
+    "fields": {
+      "name": "Pro Annual",
+      "tier": "pro",
+      "tier_rank": 1,
+      "billing_cycle": "annual",
+      "amount": "25000.00",
+      "currency": "LKR",
+      "payhere_recurrence": "1 Year",
+      "payhere_duration": "Forever",
+      "features": { "max_users": 10, "storage_gb": 50, "api_calls": 10000 },
+      "is_active": true,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "payments.plan",
+    "pk": "8fd93278-3ca2-4a60-a41a-3a8ebb65a94a",
+    "fields": {
+      "name": "Enterprise Monthly",
+      "tier": "enterprise",
+      "tier_rank": 2,
+      "billing_cycle": "monthly",
+      "amount": "8000.00",
+      "currency": "LKR",
+      "payhere_recurrence": "1 Month",
+      "payhere_duration": "Forever",
+      "features": { "max_users": 100, "storage_gb": 500, "api_calls": 100000 },
+      "is_active": true,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "payments.plan",
+    "pk": "6228b0fc-1fc7-469c-97f8-6adf3df119b0",
+    "fields": {
+      "name": "Enterprise Annual",
+      "tier": "enterprise",
+      "tier_rank": 2,
+      "billing_cycle": "annual",
+      "amount": "80000.00",
+      "currency": "LKR",
+      "payhere_recurrence": "1 Year",
+      "payhere_duration": "Forever",
+      "features": { "max_users": 100, "storage_gb": 500, "api_calls": 100000 },
+      "is_active": true,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  }
+]
