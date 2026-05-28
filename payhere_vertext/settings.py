@@ -123,6 +123,35 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Redis
+REDIS_URL = os.getenv('REDIS_URL')
+
+# Cache — uses Upstash Redis
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {'ssl_cert_reqs': None},
+        },
+    }
+}
+
+# Celery
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_BROKER_USE_SSL = {'ssl_cert_reqs': None}
+CELERY_REDIS_BACKEND_USE_SSL = {'ssl_cert_reqs': None}
+
+# Email — prints to console during development
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'noreply@vertext.lk'
+
 # PayHere
 PAYHERE_MERCHANT_ID = os.getenv('PAYHERE_MERCHANT_ID')
 PAYHERE_MERCHANT_SECRET = os.getenv('PAYHERE_MERCHANT_SECRET')
