@@ -111,15 +111,9 @@ Visit `http://localhost:8000/admin/` to manage users, plans, subscriptions, and 
 
 ## 7. User data — pick your case
 
-### Case A: Your database already has users (skip fixture loading)
+### Case A: Your database already has users
 
-Just run migrate — tables and plans are ready, your existing users are untouched.
-
-```bash
-python manage.py migrate
-```
-
-Use `GET /api/users/` to find the user IDs to pass in API calls.
+Skip this step entirely — your existing users are untouched by the migrations. Use `GET /api/users/` to find the user IDs to pass in API calls.
 
 ---
 
