@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Plan, Subscription
+from .models import Plan, Subscription, PaymentTransaction
 
 
 class PlanSerializer(serializers.ModelSerializer):
@@ -22,4 +22,15 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'id', 'plan', 'pending_plan', 'status',
             'started_at', 'current_period_start', 'current_period_end',
             'cancelled_at', 'cancel_at_period_end',
+        ]
+
+
+class PaymentTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentTransaction
+        fields = [
+            'id', 'order_id', 'payment_id', 'amount', 'currency',
+            'status_code', 'status_message', 'payment_method',
+            'card_holder_name', 'card_no', 'installment_number',
+            'md5sig_verified', 'created_at',
         ]

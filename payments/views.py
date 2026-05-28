@@ -2,10 +2,11 @@ import hashlib
 import time
 from decimal import Decimal, InvalidOperation
 
+import requests as http_requests
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.utils.decorators import method_decorator
+from django.core.cache import cache
 from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -13,7 +14,9 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .models import Plan, Subscription, PaymentOrder, PaymentTransaction
-from .serializers import PlanSerializer, SubscriptionSerializer
+from .serializers import PlanSerializer, SubscriptionSerializer, PaymentTransactionSerializer
+
+MSG_USER_NOT_FOUND = 'User not found'
 
 
 def generate_payhere_hash(merchant_id, order_id, amount, currency, merchant_secret):
@@ -45,7 +48,7 @@ def my_subscription(request):
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
-        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': MSG_USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
 
     free_plan = Plan.objects.get(tier='free')
     subscription, _ = Subscription.objects.get_or_create(
@@ -71,7 +74,7 @@ def initiate_payment(request):
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
-        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': MSG_USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
 
     try:
         plan = Plan.objects.get(pk=plan_id, is_active=True)
@@ -257,3 +260,170 @@ def payment_notify(request):
         payment_order.save()
 
     return Response({'status': 'ok'})
+
+
+# ---------------------------------------------------------------------------
+# OAuth token helper — used by cancel, retry, and refund endpoints
+# ---------------------------------------------------------------------------
+
+def get_payhere_token():
+    token = cache.get('payhere_oauth_token')
+    if token:
+        return token
+
+    response = http_requests.post(
+        f"{settings.PAYHERE_BASE_URL}/merchant/v1/oauth/token",
+        data={'grant_type': 'client_credentials'},
+        auth=(settings.PAYHERE_APP_ID, settings.PAYHERE_APP_SECRET),
+        timeout=10,
+    )
+    response.raise_for_status()
+    data = response.json()
+    token = data['access_token']
+    expires_in = int(data.get('expires_in', 599))
+    cache.set('payhere_oauth_token', token, expires_in - 30)
+    return token
+
+
+# ---------------------------------------------------------------------------
+# Step 7: Cancel subscription
+# ---------------------------------------------------------------------------
+
+@api_view(['POST'])
+def cancel_subscription(request):
+    user_id = request.data.get('user_id')
+    if not user_id:
+        return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({'error': MSG_USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        subscription = Subscription.objects.get(user=user)
+    except Subscription.DoesNotExist:
+        return Response({'error': 'No subscription found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if subscription.status != 'active':
+        return Response({'error': 'Subscription is not active'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if subscription.cancel_at_period_end:
+        return Response({'error': 'Subscription is already scheduled for cancellation'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not subscription.payhere_subscription_id:
+        return Response({'error': 'No PayHere subscription ID found'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        token = get_payhere_token()
+        response = http_requests.post(
+            f"{settings.PAYHERE_BASE_URL}/merchant/v1/subscription/cancel",
+            json={'subscription_id': subscription.payhere_subscription_id},
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=10,
+        )
+        response.raise_for_status()
+    except http_requests.RequestException as exc:
+        return Response({'error': f'PayHere API error: {exc}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+    subscription.cancel_at_period_end = True
+    subscription.cancelled_at = now()
+    subscription.save()
+
+    serializer = SubscriptionSerializer(subscription)
+    return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# Step 8: Change plan
+# ---------------------------------------------------------------------------
+
+def _is_upgrade(current_plan, new_plan):
+    if new_plan.tier_rank > current_plan.tier_rank:
+        return True
+    if (new_plan.tier_rank == current_plan.tier_rank
+            and new_plan.billing_cycle == 'annual'
+            and current_plan.billing_cycle == 'monthly'):
+        return True
+    return False
+
+
+@api_view(['POST'])
+def change_plan(request):
+    user_id = request.data.get('user_id')
+    new_plan_id = request.data.get('new_plan_id')
+
+    if not user_id or not new_plan_id:
+        return Response({'error': 'user_id and new_plan_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({'error': MSG_USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        subscription = Subscription.objects.get(user=user)
+    except Subscription.DoesNotExist:
+        return Response({'error': 'No subscription found'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        new_plan = Plan.objects.get(pk=new_plan_id, is_active=True)
+    except Plan.DoesNotExist:
+        return Response({'error': 'Plan not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if new_plan.tier == 'free':
+        return Response({'error': 'Use the cancel endpoint to move to the free plan'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if subscription.plan == new_plan:
+        return Response({'error': 'User is already on this plan'}, status=status.HTTP_400_BAD_REQUEST)
+
+    direction = 'upgrade' if _is_upgrade(subscription.plan, new_plan) else 'downgrade'
+    subscription.pending_plan = new_plan
+    subscription.save()
+
+    serializer = SubscriptionSerializer(subscription)
+    return Response({
+        'direction': direction,
+        'message': f'Plan change to {new_plan.name} scheduled. Takes effect at end of current period.',
+        'subscription': serializer.data,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Step 9: Payment history
+# ---------------------------------------------------------------------------
+
+@api_view(['GET'])
+def payment_history(request):
+    user_id = request.query_params.get('user_id')
+    if not user_id:
+        return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({'error': MSG_USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+
+    transactions = PaymentTransaction.objects.filter(user=user).order_by('-created_at')
+    serializer = PaymentTransactionSerializer(transactions, many=True)
+    return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# Step 10: Return and cancel-return URL handlers
+# ---------------------------------------------------------------------------
+
+@api_view(['GET'])
+def payment_return(request):
+    # PayHere redirects the user's browser here after payment.
+    # No payment data is passed — Angular polls /api/subscriptions/me/ to get the result.
+    return Response({'message': 'Payment flow complete. Check subscription status.'})
+
+
+@api_view(['GET'])
+def payment_cancel_return(request):
+    # PayHere redirects here when the user leaves without paying.
+    order_id = request.query_params.get('order_id', '')
+    if order_id:
+        PaymentOrder.objects.filter(order_id=order_id, status='pending').update(status='cancelled')
+    return Response({'message': 'Payment cancelled by user.'})
