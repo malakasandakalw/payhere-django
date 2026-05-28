@@ -39,6 +39,9 @@ class Subscription(models.Model):
     pending_plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True, related_name='pending_subscriptions')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     payhere_subscription_id = models.CharField(max_length=100, blank=True, default='')
+    # TODO: customer_token must be encrypted at rest before going live.
+    # This token can be used to charge the user via PayHere Charging API.
+    # Use cryptography.fernet.Fernet — encrypt before save, decrypt before use.
     customer_token = models.CharField(max_length=200, blank=True, default='')
     started_at = models.DateTimeField(null=True, blank=True)
     current_period_start = models.DateTimeField(null=True, blank=True)

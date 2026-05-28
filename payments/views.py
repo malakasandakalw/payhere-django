@@ -170,6 +170,7 @@ def _activate_subscription(user, plan, payment_order, transaction, payhere_subsc
     subscription.status = 'active'
     subscription.payhere_subscription_id = payhere_subscription_id
     if customer_token:
+        # TODO: encrypt customer_token before saving — see models.py comment
         subscription.customer_token = customer_token
     if not subscription.started_at:
         subscription.started_at = period_start
