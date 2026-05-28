@@ -83,5 +83,22 @@
       "is_active": true,
       "created_at": "2026-01-01T00:00:00Z"
     }
+  },
+  {
+    "model": "payments.plan",
+    "pk": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "fields": {
+      "name": "Test Daily",
+      "tier": "pro",
+      "tier_rank": 1,
+      "billing_cycle": "daily",
+      "amount": "100.00",
+      "currency": "LKR",
+      "payhere_recurrence": "1 Day",
+      "payhere_duration": "Forever",
+      "features": { "max_users": 10, "storage_gb": 50, "api_calls": 10000 },
+      "is_active": false,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
   }
 ]

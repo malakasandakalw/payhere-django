@@ -83,6 +83,8 @@ The `fixtures/` folder contains ready-to-load data for plans and test users.
 
 **Load plans** (skip this if `migrate` already seeded them — check with `GET /api/plans/`):
 
+> The fixture also includes a **Test Daily** plan (`is_active = false` by default). To use it for recurring billing tests, go to Django admin → Plans → Test Daily → check **Is active** → Save. Disable it again when done so it does not show on the frontend.
+
 ```bash
 python manage.py loaddata local-setup/fixtures/plans.json
 ```
