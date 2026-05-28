@@ -90,27 +90,52 @@ python manage.py migrate payments
 
 ## 6. Run the app
 
-Three terminals required.
+Three terminals are required. Each runs a separate process that the app depends on.
 
-**Terminal 1 — Django**
+---
+
+**Terminal 1 — Django API server**
+
+The main backend. Handles all HTTP requests from the frontend and processes PayHere notify callbacks.
+
 ```bash
 source venv/bin/activate
 python manage.py runserver
 ```
 
+API available at `http://localhost:8000/api/`.
+
+---
+
 **Terminal 2 — Celery Worker**
+
+Executes background tasks. This is the process that actually *runs* jobs when they are triggered — sending emails, calling the PayHere API to cancel or retry subscriptions, moving subscriptions to expired status.
+
+Without this running, background tasks will queue up but never execute.
+
 ```bash
 source venv/bin/activate
 celery -A config worker -l info
 ```
 
+---
+
 **Terminal 3 — Celery Beat**
+
+The scheduler. Acts like a cron job — it reads the schedule defined in `config/settings.py` and fires the following tasks automatically every day:
+
+| Time       | Task                                                              |
+| ---------- | ----------------------------------------------------------------- |
+| Midnight   | Expire cancelled subscriptions; activate pending plan changes     |
+| 9:00 AM    | Send renewal reminder emails; alert users with failed payments    |
+| 10:00 AM   | Retry failed payment charges (dunning logic)                      |
+
+Without this running, none of the scheduled jobs will ever trigger. The worker would sit idle waiting for tasks that never arrive.
+
 ```bash
 source venv/bin/activate
 celery -A config beat -l info
 ```
-
-API available at `http://localhost:8000/api/`.
 
 ---
 
