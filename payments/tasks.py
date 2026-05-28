@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from celery import shared_task
@@ -8,6 +9,8 @@ from django.utils.timezone import now
 from .models import Plan, Subscription
 from .utils import cancel_payhere_subscription, retry_payhere_subscription
 
+logger = logging.getLogger(__name__)
+
 
 @shared_task
 def expire_cancelled_subscriptions():
@@ -16,6 +19,7 @@ def expire_cancelled_subscriptions():
     Finds subscriptions where the user cancelled and the paid period has now ended.
     Moves them to expired and drops the user back to the Free plan.
     """
+    logger.info('[Task] expire_cancelled_subscriptions: starting')
     subscriptions = Subscription.objects.filter(
         cancel_at_period_end=True,
         current_period_end__lte=now(),
@@ -26,6 +30,8 @@ def expire_cancelled_subscriptions():
     count = 0
 
     for subscription in subscriptions:
+        logger.info('[Task] Expiring cancelled subscription | user=%s plan="%s"',
+                    subscription.user.username, subscription.plan.name)
         subscription.status = 'expired'
         subscription.plan = free_plan
         subscription.cancel_at_period_end = False
@@ -37,7 +43,7 @@ def expire_cancelled_subscriptions():
                 f"Hi {subscription.user.first_name},\n\n"
                 f"Your subscription has ended and you have been moved to the Free plan.\n\n"
                 f"To resubscribe, visit the pricing page.\n\n"
-                f"Team Vertext"
+                f"Team"
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[subscription.user.email],
@@ -45,7 +51,9 @@ def expire_cancelled_subscriptions():
         )
         count += 1
 
-    return f'{count} subscription(s) expired and moved to Free plan'
+    result = f'{count} subscription(s) expired and moved to Free plan'
+    logger.info('[Task] expire_cancelled_subscriptions: done — %s', result)
+    return result
 
 
 @shared_task
@@ -55,6 +63,7 @@ def activate_pending_plan_changes():
     Finds subscriptions where the user requested a plan change and the current period has ended.
     Cancels the old PayHere subscription and notifies the user to complete payment for the new plan.
     """
+    logger.info('[Task] activate_pending_plan_changes: starting')
     subscriptions = Subscription.objects.filter(
         pending_plan__isnull=False,
         current_period_end__lte=now(),
@@ -65,12 +74,15 @@ def activate_pending_plan_changes():
 
     for subscription in subscriptions:
         new_plan = subscription.pending_plan
+        logger.info('[Task] Activating plan change | user=%s old="%s" new="%s"',
+                    subscription.user.username, subscription.plan.name, new_plan.name)
 
         if subscription.payhere_subscription_id:
             try:
                 cancel_payhere_subscription(subscription.payhere_subscription_id)
             except Exception:
-                pass
+                logger.warning('[Task] Failed to cancel PayHere subscription %s — continuing anyway',
+                               subscription.payhere_subscription_id)
 
         subscription.plan = new_plan
         subscription.pending_plan = None
@@ -86,7 +98,7 @@ def activate_pending_plan_changes():
                 f"Hi {subscription.user.first_name},\n\n"
                 f"Your current plan has ended. Your requested {new_plan.name} plan is ready.\n\n"
                 f"Please visit the pricing page and complete the payment to activate it.\n\n"
-                f"Team Vertext"
+                f"Team"
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[subscription.user.email],
@@ -94,7 +106,9 @@ def activate_pending_plan_changes():
         )
         count += 1
 
-    return f'{count} pending plan change(s) processed'
+    result = f'{count} pending plan change(s) processed'
+    logger.info('[Task] activate_pending_plan_changes: done — %s', result)
+    return result
 
 
 @shared_task
@@ -104,6 +118,7 @@ def send_renewal_reminders():
     Sends a reminder email to users whose subscription renews in exactly 3 days.
     No action needed from the user — PayHere auto-charges their saved card.
     """
+    logger.info('[Task] send_renewal_reminders: starting')
     reminder_date = (now() + timedelta(days=3)).date()
 
     subscriptions = Subscription.objects.filter(
@@ -116,6 +131,8 @@ def send_renewal_reminders():
 
     for subscription in subscriptions:
         renewal_date = subscription.current_period_end.strftime('%B %d, %Y')
+        logger.info('[Task] Sending renewal reminder | user=%s plan="%s" renewal=%s',
+                    subscription.user.username, subscription.plan.name, renewal_date)
         send_mail(
             subject=f'Your {subscription.plan.name} renews in 3 days',
             message=(
@@ -124,7 +141,7 @@ def send_renewal_reminders():
                 f"LKR {subscription.plan.amount} will be automatically charged to your saved card. "
                 f"No action needed.\n\n"
                 f"To cancel before renewal, visit your billing page.\n\n"
-                f"Team Vertext"
+                f"Team"
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[subscription.user.email],
@@ -132,7 +149,9 @@ def send_renewal_reminders():
         )
         count += 1
 
-    return f'{count} renewal reminder(s) sent'
+    result = f'{count} renewal reminder(s) sent'
+    logger.info('[Task] send_renewal_reminders: done — %s', result)
+    return result
 
 
 @shared_task
@@ -141,6 +160,7 @@ def alert_failed_subscriptions():
     Runs daily at 9am.
     Sends a warning email to users whose recurring payment has failed.
     """
+    logger.info('[Task] alert_failed_subscriptions: starting')
     subscriptions = Subscription.objects.filter(
         status='failed',
     ).select_related('user', 'plan')
@@ -148,6 +168,8 @@ def alert_failed_subscriptions():
     count = 0
 
     for subscription in subscriptions:
+        logger.info('[Task] Alerting failed subscription | user=%s plan="%s" retry_count=%d',
+                    subscription.user.username, subscription.plan.name, subscription.retry_count)
         send_mail(
             subject='Action required: Your payment failed',
             message=(
@@ -156,7 +178,7 @@ def alert_failed_subscriptions():
                 f"may be restricted.\n\n"
                 f"Please visit the pricing page to resubscribe with an updated payment method.\n\n"
                 f"If you believe this is a mistake, contact our support team.\n\n"
-                f"Team Vertext"
+                f"Team"
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[subscription.user.email],
@@ -164,7 +186,9 @@ def alert_failed_subscriptions():
         )
         count += 1
 
-    return f'{count} failed subscription alert(s) sent'
+    result = f'{count} failed subscription alert(s) sent'
+    logger.info('[Task] alert_failed_subscriptions: done — %s', result)
+    return result
 
 
 @shared_task
@@ -177,6 +201,7 @@ def process_dunning_retries():
       - If grace period has expired, moves user to Free plan and sends final email
     Note: The actual success/failure of the retry charge comes back via notify_url callback.
     """
+    logger.info('[Task] process_dunning_retries: starting')
     free_plan = Plan.objects.get(tier='free')
     subscriptions = Subscription.objects.filter(
         status='failed',
@@ -188,6 +213,8 @@ def process_dunning_retries():
 
     for subscription in subscriptions:
         if now() > subscription.grace_period_end:
+            logger.warning('[Task] Grace period expired | user=%s plan="%s" — moving to Free plan',
+                           subscription.user.username, subscription.plan.name)
             subscription.status = 'expired'
             subscription.plan = free_plan
             subscription.grace_period_end = None
@@ -201,7 +228,7 @@ def process_dunning_retries():
                     f"but were unable to process the payment.\n\n"
                     f"Your account has been moved to the Free plan.\n\n"
                     f"To resubscribe, visit the pricing page and complete a new payment.\n\n"
-                    f"Team Vertext"
+                    f"Team"
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[subscription.user.email],
@@ -211,14 +238,22 @@ def process_dunning_retries():
             continue
 
         if not subscription.payhere_subscription_id:
+            logger.warning('[Task] Skipping retry — no payhere_subscription_id | user=%s',
+                           subscription.user.username)
             continue
 
         try:
             retry_payhere_subscription(subscription.payhere_subscription_id)
             subscription.retry_count += 1
             subscription.save()
+            logger.info('[Task] Retry attempt %d sent | user=%s sub=%s',
+                        subscription.retry_count, subscription.user.username,
+                        subscription.payhere_subscription_id)
             retried += 1
         except Exception:
-            pass
+            logger.exception('[Task] Retry API call failed | user=%s sub=%s',
+                             subscription.user.username, subscription.payhere_subscription_id)
 
-    return f'{retried} retry attempt(s) made, {expired} subscription(s) expired after grace period'
+    result = f'{retried} retry attempt(s) made, {expired} subscription(s) expired after grace period'
+    logger.info('[Task] process_dunning_retries: done — %s', result)
+    return result

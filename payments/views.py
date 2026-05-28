@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import time
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -16,6 +17,8 @@ from rest_framework import status
 from .models import Plan, Subscription, PaymentOrder, PaymentTransaction
 from .serializers import PlanSerializer, SubscriptionSerializer, PaymentTransactionSerializer, UserSerializer
 from .utils import get_payhere_token, cancel_payhere_subscription
+
+logger = logging.getLogger(__name__)
 
 MSG_USER_NOT_FOUND = 'User not found'
 
@@ -102,6 +105,9 @@ def initiate_payment(request):
     amount = f"{plan.amount:.2f}"
     currency = plan.currency
 
+    logger.info('[Payment] Initiating payment | user=%s plan="%s" order_id=%s amount=%s %s',
+                user.username, plan.name, order_id, amount, currency)
+
     PaymentOrder.objects.create(
         order_id=order_id,
         user=user,
@@ -141,6 +147,33 @@ def initiate_payment(request):
     })
 
 
+def _parse_notify_data(data):
+    """Parse and coerce the raw notify payload fields into Python types."""
+    try:
+        status_code_int = int(data.get('status_code', '0'))
+    except (ValueError, TypeError):
+        status_code_int = 0
+
+    try:
+        amount_decimal = Decimal(data.get('payhere_amount', '0'))
+    except InvalidOperation:
+        amount_decimal = Decimal('0.00')
+
+    try:
+        raw_install = data.get('item_rec_install_paid')
+        install_number = int(raw_install) if raw_install else None
+    except (ValueError, TypeError):
+        install_number = None
+
+    raw_rec_date = data.get('item_rec_date_next', '')
+    try:
+        rec_date_next = date.fromisoformat(raw_rec_date) if raw_rec_date else None
+    except ValueError:
+        rec_date_next = None
+
+    return status_code_int, amount_decimal, install_number, rec_date_next
+
+
 def _resolve_context(data):
     """Extract user, plan, subscription from a notify payload."""
     payment_order = PaymentOrder.objects.filter(order_id=data['order_id']).first()
@@ -159,6 +192,8 @@ def _resolve_context(data):
 
 
 def _activate_subscription(user, plan, payment_order, transaction, payhere_subscription_id, customer_token):
+    logger.info('[Subscription] Activating subscription | user=%s plan="%s" payhere_sub=%s',
+                user.username, plan.name, payhere_subscription_id or 'n/a')
     period_start = now()
     period_end = period_start + (relativedelta(years=1) if plan.billing_cycle == 'annual' else relativedelta(months=1))
 
@@ -186,15 +221,22 @@ def _activate_subscription(user, plan, payment_order, transaction, payhere_subsc
 
     transaction.subscription = subscription
     transaction.save()
+    logger.info('[Subscription] Subscription activated | user=%s plan="%s" period_end=%s',
+                user.username, plan.name, period_end.date())
 
 
 def _handle_failed_charge(subscription, payment_order):
     from datetime import timedelta
+    logger.warning('[Payment] Charge failed | user=%s plan="%s"',
+                   subscription.user.username if subscription else 'unknown',
+                   subscription.plan.name if subscription else 'unknown')
     if subscription:
         subscription.status = 'failed'
         subscription.grace_period_end = now() + timedelta(days=4)
         subscription.retry_count = 0
         subscription.save()
+        logger.warning('[Subscription] Status set to failed | user=%s grace_period_end=%s',
+                       subscription.user.username, subscription.grace_period_end.date())
         from django.core.mail import send_mail
         from django.conf import settings as django_settings
         send_mail(
@@ -226,29 +268,13 @@ def payment_notify(request):
 
     payment_id = data.get('payment_id', '')
     status_code_raw = data.get('status_code', '0')
+    logger.info('[Notify] Received PayHere notification | payment_id=%s order_id=%s status_code=%s',
+                payment_id, data.get('order_id', ''), status_code_raw)
 
-    try:
-        status_code_int = int(status_code_raw)
-    except (ValueError, TypeError):
-        status_code_int = 0
-
-    try:
-        amount_decimal = Decimal(data.get('payhere_amount', '0'))
-    except InvalidOperation:
-        amount_decimal = Decimal('0.00')
-
-    try:
-        install_number = int(data.get('item_rec_install_paid')) if data.get('item_rec_install_paid') else None
-    except (ValueError, TypeError):
-        install_number = None
-
-    raw_rec_date = data.get('item_rec_date_next', '')
-    try:
-        rec_date_next = date.fromisoformat(raw_rec_date) if raw_rec_date else None
-    except ValueError:
-        rec_date_next = None
+    status_code_int, amount_decimal, install_number, rec_date_next = _parse_notify_data(data)
 
     if PaymentTransaction.objects.filter(payment_id=payment_id).exists():
+        logger.info('[Notify] Duplicate payment_id ignored: %s', payment_id)
         return Response({'status': 'already processed'})
 
     merchant_id = data.get('merchant_id', '')
@@ -263,9 +289,15 @@ def payment_notify(request):
         merchant_id, order_id, payhere_amount, payhere_currency,
         status_code_raw, settings.PAYHERE_MERCHANT_SECRET, received_md5sig,
     )
+    if md5sig_verified:
+        logger.info('[Notify] MD5 signature verified OK | order_id=%s', order_id)
+    else:
+        logger.warning('[Notify] MD5 signature FAILED | order_id=%s — transaction recorded but no action taken', order_id)
 
     user, plan, subscription, payment_order = _resolve_context(data)
     if user is None:
+        logger.warning('[Notify] Could not resolve user/subscription context | order_id=%s sub_id=%s',
+                       order_id, data.get('subscription_id', ''))
         return Response({'status': 'ok'})
 
     transaction = PaymentTransaction.objects.create(
