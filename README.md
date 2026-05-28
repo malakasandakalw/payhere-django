@@ -1,4 +1,4 @@
-# Vertext PayHere Backend
+# PayHere Django Backend
 
 Django REST API backend for PayHere subscription billing. Handles the full SaaS subscription lifecycle — plan selection, recurring payments via PayHere, cancellations, plan changes, dunning (failed payment retries), and automated email notifications.
 
@@ -33,14 +33,14 @@ There is no login system. For testing, every API call passes a `user_id` to iden
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Framework | Django 6 + Django REST Framework |
-| Database | PostgreSQL (Supabase) |
-| Cache / Message Broker | Redis (Upstash) |
-| Background Jobs | Celery + Celery Beat |
-| Payment Gateway | PayHere (Sri Lanka) |
-| Email (dev) | Console backend (prints to terminal) |
+| Layer                  | Technology                           |
+| ---------------------- | ------------------------------------ |
+| Framework              | Django 6 + Django REST Framework     |
+| Database               | PostgreSQL (Supabase)                |
+| Cache / Message Broker | Redis (Upstash)                      |
+| Background Jobs        | Celery + Celery Beat                 |
+| Payment Gateway        | PayHere (Sri Lanka)                  |
+| Email (dev)            | Console backend (prints to terminal) |
 
 ---
 
@@ -48,13 +48,13 @@ There is no login system. For testing, every API call passes a `user_id` to iden
 
 Five plans are seeded into the database automatically via migrations.
 
-| Plan | Billing | Amount |
-|---|---|---|
-| Free | — | LKR 0 |
-| Pro Monthly | Monthly | LKR 2,500 |
-| Pro Annual | Annual | LKR 25,000 |
-| Enterprise Monthly | Monthly | LKR 8,000 |
-| Enterprise Annual | Annual | LKR 80,000 |
+| Plan               | Billing | Amount     |
+| ------------------ | ------- | ---------- |
+| Free               | —       | LKR 0      |
+| Pro Monthly        | Monthly | LKR 2,500  |
+| Pro Annual         | Annual  | LKR 25,000 |
+| Enterprise Monthly | Monthly | LKR 8,000  |
+| Enterprise Annual  | Annual  | LKR 80,000 |
 
 Each plan has a `features` JSON field: `{ max_users, storage_gb, api_calls }`.
 
@@ -106,20 +106,20 @@ python manage.py createsuperuser
 
 Copy `.env.example` to `.env` and fill in every value.
 
-| Variable | Where to find it | Description |
-|---|---|---|
-| `SECRET_KEY` | Generate one | Django secret key — any long random string |
-| `DATABASE_URL` | Supabase → Project Settings → Database | Full PostgreSQL connection string |
-| `REDIS_URL` | Upstash → Redis → Details | Must start with `rediss://` (double s) for TLS |
-| `PAYHERE_MERCHANT_ID` | PayHere Dashboard → Settings → Domain & Credentials | Your sandbox merchant ID |
-| `PAYHERE_MERCHANT_SECRET` | PayHere Dashboard → Settings → Domain & Credentials | Used to sign payment hashes |
-| `PAYHERE_APP_ID` | PayHere Dashboard → Settings → Apps | Used for Merchant API (cancel/retry) |
-| `PAYHERE_APP_SECRET` | PayHere Dashboard → Settings → Apps | OAuth secret for Merchant API |
-| `PAYHERE_SANDBOX` | — | Set to `true` for sandbox testing |
-| `PAYHERE_BASE_URL` | — | `https://sandbox.payhere.lk` for sandbox |
-| `PAYHERE_NOTIFY_URL` | Your ngrok URL | PayHere POSTs payment results here — must be public |
-| `PAYHERE_RETURN_URL` | — | PayHere redirects user here after successful payment |
-| `PAYHERE_CANCEL_URL` | — | PayHere redirects user here if they abandon payment |
+| Variable                  | Where to find it                                    | Description                                          |
+| ------------------------- | --------------------------------------------------- | ---------------------------------------------------- |
+| `SECRET_KEY`              | Generate one                                        | Django secret key — any long random string           |
+| `DATABASE_URL`            | Supabase → Project Settings → Database              | Full PostgreSQL connection string                    |
+| `REDIS_URL`               | Upstash → Redis → Details                           | Must start with `rediss://` (double s) for TLS       |
+| `PAYHERE_MERCHANT_ID`     | PayHere Dashboard → Settings → Domain & Credentials | Your sandbox merchant ID                             |
+| `PAYHERE_MERCHANT_SECRET` | PayHere Dashboard → Settings → Domain & Credentials | Used to sign payment hashes                          |
+| `PAYHERE_APP_ID`          | PayHere Dashboard → Settings → Apps                 | Used for Merchant API (cancel/retry)                 |
+| `PAYHERE_APP_SECRET`      | PayHere Dashboard → Settings → Apps                 | OAuth secret for Merchant API                        |
+| `PAYHERE_SANDBOX`         | —                                                   | Set to `true` for sandbox testing                    |
+| `PAYHERE_BASE_URL`        | —                                                   | `https://sandbox.payhere.lk` for sandbox             |
+| `PAYHERE_NOTIFY_URL`      | Your backend URL                                    | PayHere POSTs payment results here — must be public  |
+| `PAYHERE_RETURN_URL`      | —                                                   | PayHere redirects user here after successful payment |
+| `PAYHERE_CANCEL_URL`      | —                                                   | PayHere redirects user here if they abandon payment  |
 
 **Important about `PAYHERE_NOTIFY_URL`:** PayHere needs to reach your backend from the internet. During development, use ngrok:
 
@@ -138,18 +138,21 @@ The ngrok URL changes every session. Update `.env` and restart Django each time.
 You need three terminals running at the same time.
 
 **Terminal 1 — Django (the API server)**
+
 ```bash
 source venv/bin/activate
 python manage.py runserver
 ```
 
 **Terminal 2 — Celery Worker (runs background jobs)**
+
 ```bash
 source venv/bin/activate
 celery -A payhere_vertext worker -l info
 ```
 
 **Terminal 3 — Celery Beat (schedules the jobs)**
+
 ```bash
 source venv/bin/activate
 celery -A payhere_vertext beat -l info
@@ -170,15 +173,29 @@ All endpoints are prefixed with `/api/`. Responses are JSON.
 List all active users. Used in development to find user IDs for testing other endpoints.
 
 **Request**
+
 ```
 GET /api/users/
 ```
 
 **Response**
+
 ```json
 [
-  { "id": 1, "username": "alice", "first_name": "Alice", "last_name": "Silva", "email": "alice@example.com" },
-  { "id": 2, "username": "bob",   "first_name": "Bob",   "last_name": "Perera", "email": "bob@example.com" }
+  {
+    "id": 1,
+    "username": "alice",
+    "first_name": "Alice",
+    "last_name": "Silva",
+    "email": "alice@example.com"
+  },
+  {
+    "id": 2,
+    "username": "bob",
+    "first_name": "Bob",
+    "last_name": "Perera",
+    "email": "bob@example.com"
+  }
 ]
 ```
 
@@ -189,11 +206,13 @@ GET /api/users/
 List all active subscription plans. Call this to build the pricing page. Plans are ordered by tier and billing cycle.
 
 **Request**
+
 ```
 GET /api/plans/
 ```
 
 **Response**
+
 ```json
 [
   {
@@ -232,11 +251,13 @@ GET /api/plans/
 Get the current subscription for a user. If the user has never subscribed, it automatically creates a Free plan subscription and returns it.
 
 **Request**
+
 ```
 GET /api/subscriptions/me/?user_id=1
 ```
 
 **Response**
+
 ```json
 {
   "id": "uuid",
@@ -255,13 +276,13 @@ GET /api/subscriptions/me/?user_id=1
 
 **Subscription statuses:**
 
-| Status | Meaning |
-|---|---|
-| `pending` | Created but no successful payment yet |
-| `active` | Paid and in a valid billing period |
-| `failed` | Recurring payment failed — in grace period |
-| `cancelled` | User cancelled — still active until `current_period_end` |
-| `expired` | Period ended after cancellation, or moved to Free after failed payment |
+| Status      | Meaning                                                                |
+| ----------- | ---------------------------------------------------------------------- |
+| `pending`   | Created but no successful payment yet                                  |
+| `active`    | Paid and in a valid billing period                                     |
+| `failed`    | Recurring payment failed — in grace period                             |
+| `cancelled` | User cancelled — still active until `current_period_end`               |
+| `expired`   | Period ended after cancellation, or moved to Free after failed payment |
 
 ---
 
@@ -270,6 +291,7 @@ GET /api/subscriptions/me/?user_id=1
 Start a payment. Returns all the fields needed to submit to PayHere's checkout. Call this when the user clicks "Subscribe" or "Upgrade".
 
 **Request**
+
 ```json
 {
   "user_id": 1,
@@ -278,6 +300,7 @@ Start a payment. Returns all the fields needed to submit to PayHere's checkout. 
 ```
 
 **Response**
+
 ```json
 {
   "merchant_id": "1234567",
@@ -315,11 +338,11 @@ Always returns HTTP 200. Any other status code would cause PayHere to retry inde
 
 **Status codes PayHere sends:**
 
-| Code | Meaning | Action taken |
-|---|---|---|
-| `2` | Payment successful | Activates or renews the subscription |
-| `-1` | Payment cancelled by user | Marks the payment order as cancelled |
-| `-2` | Payment failed | Starts grace period + dunning |
+| Code | Meaning                    | Action taken                         |
+| ---- | -------------------------- | ------------------------------------ |
+| `2`  | Payment successful         | Activates or renews the subscription |
+| `-1` | Payment cancelled by user  | Marks the payment order as cancelled |
+| `-2` | Payment failed             | Starts grace period + dunning        |
 | `-3` | Chargeback (bank reversal) | Same as failed — starts grace period |
 
 ---
@@ -329,6 +352,7 @@ Always returns HTTP 200. Any other status code would cause PayHere to retry inde
 PayHere redirects the user's browser here after a payment attempt. This does not contain payment data — use it only to trigger a UI state change. Poll `/api/subscriptions/me/` to get the actual subscription status.
 
 **Response**
+
 ```json
 { "message": "Payment flow complete. Check subscription status." }
 ```
@@ -342,6 +366,7 @@ PayHere redirects the user's browser here if they leave the checkout without pay
 **Query params:** `?order_id=ORD-1-1748000000` (sent by PayHere automatically)
 
 **Response**
+
 ```json
 { "message": "Payment cancelled by user." }
 ```
@@ -353,11 +378,13 @@ PayHere redirects the user's browser here if they leave the checkout without pay
 List all payment transactions for a user, newest first.
 
 **Request**
+
 ```
 GET /api/payments/history/?user_id=1
 ```
 
 **Response**
+
 ```json
 [
   {
@@ -385,11 +412,13 @@ GET /api/payments/history/?user_id=1
 Cancel the user's active subscription. The subscription stays active until the end of the current billing period (`current_period_end`), then expires automatically. PayHere stops future charges immediately.
 
 **Request**
+
 ```json
 { "user_id": 1 }
 ```
 
 **Response**
+
 ```json
 {
   "id": "uuid",
@@ -411,11 +440,13 @@ When `cancel_at_period_end` is `true`, show the user a message like: "Your subsc
 Schedule a plan change to take effect at the end of the current billing period. No payment is taken immediately. At period end, the old PayHere subscription is cancelled and the user is emailed to complete payment for the new plan.
 
 **Request**
+
 ```json
 { "user_id": 1, "new_plan_id": "uuid-of-enterprise-monthly-plan" }
 ```
 
 **Response**
+
 ```json
 {
   "direction": "upgrade",
@@ -438,8 +469,8 @@ Schedule a plan change to take effect at the end of the current billing period. 
 
 ```typescript
 // On your pricing page component init
-this.http.get<Plan[]>('http://localhost:8000/api/plans/').subscribe(plans => {
-  this.plans = plans.filter(p => p.tier !== 'free'); // show paid plans only
+this.http.get<Plan[]>("http://localhost:8000/api/plans/").subscribe((plans) => {
+  this.plans = plans.filter((p) => p.tier !== "free"); // show paid plans only
 });
 ```
 
@@ -448,8 +479,11 @@ this.http.get<Plan[]>('http://localhost:8000/api/plans/').subscribe(plans => {
 ```typescript
 const userId = 1; // replace with actual user ID from your auth system
 
-this.http.get<Subscription>(`http://localhost:8000/api/subscriptions/me/?user_id=${userId}`)
-  .subscribe(subscription => {
+this.http
+  .get<Subscription>(
+    `http://localhost:8000/api/subscriptions/me/?user_id=${userId}`,
+  )
+  .subscribe((subscription) => {
     this.subscription = subscription;
   });
 ```
@@ -638,13 +672,13 @@ status: active ─────────────────────�
 
 Celery Beat runs these jobs automatically. You must have the Celery worker and beat processes running (Terminals 2 and 3).
 
-| Job | Schedule | What it does |
-|---|---|---|
-| `expire_cancelled_subscriptions` | Daily midnight | Finds subscriptions where `cancel_at_period_end=True` and the period has ended. Moves them to `expired`, downgrades to Free plan, sends email. |
-| `activate_pending_plan_changes` | Daily 12:05 AM | Finds subscriptions with a `pending_plan` where the period has ended. Cancels the old PayHere subscription and emails the user to pay for the new plan. |
-| `send_renewal_reminders` | Daily 9:00 AM | Sends a heads-up email to users whose subscription renews in exactly 3 days. No action needed from the user — PayHere auto-charges their saved card. |
-| `alert_failed_subscriptions` | Daily 9:05 AM | Sends a warning email to all users currently in `failed` status. |
-| `process_dunning_retries` | Daily 10:00 AM | For each failed subscription within the grace period, calls the PayHere retry API. If the grace period has expired, moves the user to Free plan and sends a final email. |
+| Job                              | Schedule       | What it does                                                                                                                                                             |
+| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `expire_cancelled_subscriptions` | Daily midnight | Finds subscriptions where `cancel_at_period_end=True` and the period has ended. Moves them to `expired`, downgrades to Free plan, sends email.                           |
+| `activate_pending_plan_changes`  | Daily 12:05 AM | Finds subscriptions with a `pending_plan` where the period has ended. Cancels the old PayHere subscription and emails the user to pay for the new plan.                  |
+| `send_renewal_reminders`         | Daily 9:00 AM  | Sends a heads-up email to users whose subscription renews in exactly 3 days. No action needed from the user — PayHere auto-charges their saved card.                     |
+| `alert_failed_subscriptions`     | Daily 9:05 AM  | Sends a warning email to all users currently in `failed` status.                                                                                                         |
+| `process_dunning_retries`        | Daily 10:00 AM | For each failed subscription within the grace period, calls the PayHere retry API. If the grace period has expired, moves the user to Free plan and sends a final email. |
 
 ---
 
