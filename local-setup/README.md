@@ -69,39 +69,33 @@ PAYHERE_CANCEL_URL=http://localhost:4200/payment/cancel
 
 ## 4. Run migrations
 
-This creates all database tables and seeds the 5 subscription plans automatically.
+This creates all database tables. It also automatically seeds the 6 subscription plans (Free, Pro Monthly, Pro Annual, Enterprise Monthly, Enterprise Annual, Test Daily) via the seed migration — no separate command needed for plans.
 
 ```bash
 python manage.py migrate
 ```
 
----
-
-## 5. Load fixture data
-
-The `fixtures/` folder contains ready-to-load data for plans and test users.
-
-**Load plans** (skip this if `migrate` already seeded them — check with `GET /api/plans/`):
+After this completes, verify the plans were seeded by calling `GET /api/plans/` or checking the `payments_plan` table in your database. If plans are missing for any reason, load them manually:
 
 ```bash
 python manage.py loaddata local-setup/fixtures/plans.json
 ```
 
-**Load test users:**
+---
+
+## 5. Troubleshooting: payments tables not created
+
+If after running `migrate` the `payments_*` tables are missing from your database, it means Django has stale migration records from a previous setup. Fix it by clearing those records and re-running the payments migrations:
 
 ```bash
-python manage.py loaddata local-setup/fixtures/users.json
+# Step 1 — remove stale payments migration records
+python manage.py dbshell -- -c "DELETE FROM django_migrations WHERE app = 'payments';"
+
+# Step 2 — apply all payments migrations fresh
+python manage.py migrate payments
 ```
 
-All three test users have the same password: **`testpass123`**
-
-| ID | Username | Email               |
-|----|----------|---------------------|
-| 1  | alice    | alice@example.com   |
-| 2  | bob      | bob@example.com     |
-| 3  | carol    | carol@example.com   |
-
-> These users have no login/auth in the API — `user_id` is passed directly in requests. The password is only needed if you want to log in to the Django admin panel.
+This will properly create all tables and seed the plans.
 
 ---
 
@@ -115,7 +109,29 @@ Visit `http://localhost:8000/admin/` to manage users, plans, subscriptions, and 
 
 ---
 
-## 7. Run the app
+## 7. Load test users (optional)
+
+If your database does not already have users, load the sample test users from the fixture:
+
+```bash
+python manage.py loaddata local-setup/fixtures/users.json
+```
+
+All three test users have the same password: **`testpass123`**
+
+| ID | Username | Email             |
+|----|----------|-------------------|
+| 1  | alice    | alice@example.com |
+| 2  | bob      | bob@example.com   |
+| 3  | carol    | carol@example.com |
+
+> These users have no login/auth in the API — `user_id` is passed directly in requests. The password is only needed if you want to log in to the Django admin panel.
+>
+> **Skip this step if your database already has users.** Use `GET /api/users/` to see existing user IDs.
+
+---
+
+## 8. Run the app
 
 You need three terminals running at the same time.
 
@@ -141,7 +157,7 @@ The API is now available at `http://localhost:8000/api/`.
 
 ---
 
-## 8. Set up ngrok (for PayHere notify callback)
+## 9. Set up ngrok (for PayHere notify callback)
 
 PayHere needs a public URL to POST payment results. Start ngrok and update your `.env`:
 
