@@ -6,7 +6,6 @@ import requests as http_requests
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.cache import cache
 from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -15,6 +14,7 @@ from rest_framework import status
 
 from .models import Plan, Subscription, PaymentOrder, PaymentTransaction
 from .serializers import PlanSerializer, SubscriptionSerializer, PaymentTransactionSerializer, UserSerializer
+from .utils import get_payhere_token, cancel_payhere_subscription
 
 MSG_USER_NOT_FOUND = 'User not found'
 
@@ -270,29 +270,6 @@ def payment_notify(request):
 
 
 # ---------------------------------------------------------------------------
-# OAuth token helper — used by cancel, retry, and refund endpoints
-# ---------------------------------------------------------------------------
-
-def get_payhere_token():
-    token = cache.get('payhere_oauth_token')
-    if token:
-        return token
-
-    response = http_requests.post(
-        f"{settings.PAYHERE_BASE_URL}/merchant/v1/oauth/token",
-        data={'grant_type': 'client_credentials'},
-        auth=(settings.PAYHERE_APP_ID, settings.PAYHERE_APP_SECRET),
-        timeout=10,
-    )
-    response.raise_for_status()
-    data = response.json()
-    token = data['access_token']
-    expires_in = int(data.get('expires_in', 599))
-    cache.set('payhere_oauth_token', token, expires_in - 30)
-    return token
-
-
-# ---------------------------------------------------------------------------
 # Step 7: Cancel subscription
 # ---------------------------------------------------------------------------
 
@@ -322,14 +299,7 @@ def cancel_subscription(request):
         return Response({'error': 'No PayHere subscription ID found'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        token = get_payhere_token()
-        response = http_requests.post(
-            f"{settings.PAYHERE_BASE_URL}/merchant/v1/subscription/cancel",
-            json={'subscription_id': subscription.payhere_subscription_id},
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10,
-        )
-        response.raise_for_status()
+        cancel_payhere_subscription(subscription.payhere_subscription_id)
     except http_requests.RequestException as exc:
         return Response({'error': f'PayHere API error: {exc}'}, status=status.HTTP_502_BAD_GATEWAY)
 

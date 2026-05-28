@@ -152,6 +152,28 @@ CELERY_REDIS_BACKEND_USE_SSL = {'ssl_cert_reqs': None}
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'noreply@vertext.lk'
 
+# Celery Beat — scheduled task timetable
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'expire-cancelled-subscriptions': {
+        'task': 'payments.tasks.expire_cancelled_subscriptions',
+        'schedule': crontab(hour=0, minute=0),
+    },
+    'activate-pending-plan-changes': {
+        'task': 'payments.tasks.activate_pending_plan_changes',
+        'schedule': crontab(hour=0, minute=5),
+    },
+    'send-renewal-reminders': {
+        'task': 'payments.tasks.send_renewal_reminders',
+        'schedule': crontab(hour=9, minute=0),
+    },
+    'alert-failed-subscriptions': {
+        'task': 'payments.tasks.alert_failed_subscriptions',
+        'schedule': crontab(hour=9, minute=5),
+    },
+}
+
 # PayHere
 PAYHERE_MERCHANT_ID = os.getenv('PAYHERE_MERCHANT_ID')
 PAYHERE_MERCHANT_SECRET = os.getenv('PAYHERE_MERCHANT_SECRET')
