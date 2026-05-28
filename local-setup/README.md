@@ -69,7 +69,7 @@ PAYHERE_CANCEL_URL=http://localhost:4200/payment/cancel
 
 ## 4. Run migrations
 
-This creates all database tables. It also automatically seeds the 6 subscription plans (Free, Pro Monthly, Pro Annual, Enterprise Monthly, Enterprise Annual, Test Daily) via the seed migration — no separate command needed for plans.
+This creates all database tables and automatically seeds all 6 subscription plans (Free, Pro Monthly, Pro Annual, Enterprise Monthly, Enterprise Annual, Test Daily) — no separate command needed for plans.
 
 ```bash
 python manage.py migrate
