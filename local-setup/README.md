@@ -109,9 +109,23 @@ Visit `http://localhost:8000/admin/` to manage users, plans, subscriptions, and 
 
 ---
 
-## 7. Load test users (optional)
+## 7. User data — pick your case
 
-If your database does not already have users, load the sample test users from the fixture:
+### Case A: Your database already has users (skip fixture loading)
+
+Just run migrate — tables and plans are ready, your existing users are untouched.
+
+```bash
+python manage.py migrate
+```
+
+Use `GET /api/users/` to find the user IDs to pass in API calls.
+
+---
+
+### Case B: Fresh database with no users (load test users)
+
+If your database has no users yet, load the sample fixture:
 
 ```bash
 python manage.py loaddata local-setup/fixtures/users.json
@@ -126,8 +140,6 @@ All three test users have the same password: **`testpass123`**
 | 3  | carol    | carol@example.com |
 
 > These users have no login/auth in the API — `user_id` is passed directly in requests. The password is only needed if you want to log in to the Django admin panel.
->
-> **Skip this step if your database already has users.** Use `GET /api/users/` to see existing user IDs.
 
 ---
 
