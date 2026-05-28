@@ -195,7 +195,12 @@ def _activate_subscription(user, plan, payment_order, transaction, payhere_subsc
     logger.info('[Subscription] Activating subscription | user=%s plan="%s" payhere_sub=%s',
                 user.username, plan.name, payhere_subscription_id or 'n/a')
     period_start = now()
-    period_end = period_start + (relativedelta(years=1) if plan.billing_cycle == 'annual' else relativedelta(months=1))
+    if plan.billing_cycle == 'annual':
+        period_end = period_start + relativedelta(years=1)
+    elif plan.billing_cycle == 'daily':
+        period_end = period_start + relativedelta(days=1)
+    else:
+        period_end = period_start + relativedelta(months=1)
 
     free_plan = Plan.objects.get(tier='free')
     subscription, _ = Subscription.objects.get_or_create(
