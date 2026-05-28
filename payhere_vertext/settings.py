@@ -122,3 +122,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# PayHere
+PAYHERE_MERCHANT_ID = os.getenv('PAYHERE_MERCHANT_ID')
+PAYHERE_MERCHANT_SECRET = os.getenv('PAYHERE_MERCHANT_SECRET')
+PAYHERE_APP_ID = os.getenv('PAYHERE_APP_ID')
+PAYHERE_APP_SECRET = os.getenv('PAYHERE_APP_SECRET')
+PAYHERE_BASE_URL = os.getenv('PAYHERE_BASE_URL', 'https://sandbox.payhere.lk')
+PAYHERE_NOTIFY_URL = os.getenv('PAYHERE_NOTIFY_URL')
+PAYHERE_RETURN_URL = os.getenv('PAYHERE_RETURN_URL')
+PAYHERE_CANCEL_URL = os.getenv('PAYHERE_CANCEL_URL')
