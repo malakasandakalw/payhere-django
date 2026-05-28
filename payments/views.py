@@ -14,9 +14,16 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .models import Plan, Subscription, PaymentOrder, PaymentTransaction
-from .serializers import PlanSerializer, SubscriptionSerializer, PaymentTransactionSerializer
+from .serializers import PlanSerializer, SubscriptionSerializer, PaymentTransactionSerializer, UserSerializer
 
 MSG_USER_NOT_FOUND = 'User not found'
+
+
+@api_view(['GET'])
+def user_list(request):
+    users = User.objects.filter(is_active=True).order_by('id')
+    serializer = UserSerializer(users, many=True)
+    return Response(serializer.data)
 
 
 def generate_payhere_hash(merchant_id, order_id, amount, currency, merchant_secret):
