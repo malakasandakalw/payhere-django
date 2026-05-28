@@ -1,5 +1,6 @@
 import hashlib
 import time
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 import requests as http_requests
@@ -241,6 +242,12 @@ def payment_notify(request):
     except (ValueError, TypeError):
         install_number = None
 
+    raw_rec_date = data.get('item_rec_date_next', '')
+    try:
+        rec_date_next = date.fromisoformat(raw_rec_date) if raw_rec_date else None
+    except ValueError:
+        rec_date_next = None
+
     if PaymentTransaction.objects.filter(payment_id=payment_id).exists():
         return Response({'status': 'already processed'})
 
@@ -274,13 +281,15 @@ def payment_notify(request):
         card_holder_name=data.get('card_holder_name', ''),
         card_no=data.get('card_no', ''),
         installment_number=install_number,
+        item_rec_status=data.get('item_rec_status', ''),
+        item_rec_date_next=rec_date_next,
         md5sig_verified=md5sig_verified,
         raw_payload=dict(data),
     )
 
     if md5sig_verified and status_code_int == 2:
         _activate_subscription(user, plan, payment_order, transaction, payhere_subscription_id, customer_token)
-    elif md5sig_verified and status_code_int == -2:
+    elif md5sig_verified and status_code_int in (-2, -3):
         _handle_failed_charge(subscription, payment_order)
     elif payment_order and status_code_int == -1:
         payment_order.status = 'cancelled'

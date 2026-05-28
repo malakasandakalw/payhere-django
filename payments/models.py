@@ -93,6 +93,8 @@ class PaymentTransaction(models.Model):
     card_holder_name = models.CharField(max_length=100, blank=True, default='')
     card_no = models.CharField(max_length=20, blank=True, default='')
     installment_number = models.SmallIntegerField(null=True, blank=True)
+    item_rec_status = models.CharField(max_length=20, blank=True, default='')
+    item_rec_date_next = models.DateField(null=True, blank=True)
     md5sig_verified = models.BooleanField(default=False)
     raw_payload = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
