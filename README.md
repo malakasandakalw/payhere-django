@@ -20,6 +20,7 @@ Built for sandbox testing against the PayHere payment gateway (Sri Lanka).
 10. [PayHere Payment Flow](#payhere-payment-flow)
 11. [Subscription Lifecycle](#subscription-lifecycle)
 12. [Background Jobs](#background-jobs)
+13. [Sandbox Testing](#sandbox-testing)
 
 ---
 
@@ -57,6 +58,8 @@ Five plans are seeded into the database automatically via migrations.
 | Enterprise Annual  | Annual  | LKR 80,000 |
 
 Each plan has a `features` JSON field: `{ max_users, storage_gb, api_calls }`.
+
+A **daily billing cycle** is also supported for sandbox testing. Create a test plan manually via the Django admin with `billing_cycle = daily` and `payhere_recurrence = 1 Day` to test automatic recurring charges the next day instead of waiting a month. See [Sandbox Testing](#sandbox-testing).
 
 ---
 
@@ -159,6 +162,38 @@ celery -A config beat -l info
 ```
 
 The API is available at `http://localhost:8000/api/`.
+
+---
+
+## Terminal Logs
+
+The app logs all important events to the terminal so you can follow what is happening in real time. Here is what each log prefix means:
+
+| Prefix          | Where it appears  | What it tells you                                         |
+| --------------- | ----------------- | --------------------------------------------------------- |
+| `[Payment]`     | Terminal 1        | A payment was initiated — order created, amount, currency |
+| `[Notify]`      | Terminal 1        | PayHere posted a notification — status code, signature result |
+| `[Subscription]`| Terminal 1        | Subscription was activated or set to failed               |
+| `[PayHere]`     | Terminal 1 or 2   | OAuth token fetched, subscription cancelled or retried    |
+
+**Example output when a payment is successfully completed:**
+
+```
+[Payment] Initiating payment | user=alice plan="Pro Monthly" order_id=ORD-1-1748000000 amount=2500.00 LKR
+[Notify] Received PayHere notification | payment_id=320027183837 order_id=ORD-1-1748000000 status_code=2
+[Notify] MD5 signature verified OK | order_id=ORD-1-1748000000
+[Subscription] Activating subscription | user=alice plan="Pro Monthly" payhere_sub=SUB-XXXXXXXX
+[Subscription] Subscription activated | user=alice plan="Pro Monthly" period_end=2025-07-01
+```
+
+**Example output when a recurring charge fails:**
+
+```
+[Notify] Received PayHere notification | payment_id=320027183838 order_id=ORD-1-1748000000 status_code=-2
+[Notify] MD5 signature verified OK | order_id=ORD-1-1748000000
+[Payment] Charge failed | user=alice plan="Pro Monthly"
+[Subscription] Status set to failed | user=alice grace_period_end=2025-06-05
+```
 
 ---
 
@@ -399,6 +434,8 @@ GET /api/payments/history/?user_id=1
     "card_holder_name": "Alice Silva",
     "card_no": "************1234",
     "installment_number": 1,
+    "item_rec_status": "Active",
+    "item_rec_date_next": "2025-07-01",
     "md5sig_verified": true,
     "created_at": "2025-06-01T10:00:00Z"
   }
@@ -637,7 +674,8 @@ status: pending (Free plan)
     ▼
 status: active ──────────────────────────────┐
     │                                        │
-    │  PayHere auto-renews monthly/annually  │
+    │  PayHere auto-renews (daily/monthly/    │
+    │  annually based on plan recurrence)    │
     │  (notify_url receives status 2 again)  │
     │◄───────────────────────────────────────┘
     │
@@ -679,6 +717,37 @@ Celery Beat runs these jobs automatically. You must have the Celery worker and b
 | `send_renewal_reminders`         | Daily 9:00 AM  | Sends a heads-up email to users whose subscription renews in exactly 3 days. No action needed from the user — PayHere auto-charges their saved card.                     |
 | `alert_failed_subscriptions`     | Daily 9:05 AM  | Sends a warning email to all users currently in `failed` status.                                                                                                         |
 | `process_dunning_retries`        | Daily 10:00 AM | For each failed subscription within the grace period, calls the PayHere retry API. If the grace period has expired, moves the user to Free plan and sends a final email. |
+
+---
+
+## Sandbox Testing
+
+### Testing recurring billing without waiting a month
+
+PayHere supports a `1 Day` recurrence interval. Create a test plan in Django admin to test the full recurring billing cycle the next day:
+
+1. Go to `http://localhost:8000/admin` → **Plans** → **Add Plan**
+2. Fill in:
+
+| Field                | Value       |
+| -------------------- | ----------- |
+| Name                 | `Test Daily` |
+| Tier                 | `pro`       |
+| Tier rank            | `1`         |
+| Billing cycle        | `daily`     |
+| Amount               | `100.00`    |
+| Currency             | `LKR`       |
+| Payhere recurrence   | `1 Day`     |
+| Payhere duration     | `Forever`   |
+| Is active            | ✓           |
+
+3. Subscribe using that plan's UUID via `POST /api/payments/initiate/`
+4. Complete the sandbox payment — your subscription activates for 1 day
+5. The next day PayHere auto-charges and posts to your `notify_url` — watch Terminal 1 for the `[Notify]` and `[Subscription]` logs confirming the renewal
+
+### Testing a failed recurring charge
+
+Use one of PayHere's sandbox decline card numbers when completing the payment. Your `notify_url` will receive `status_code=-2`, the subscription moves to `failed`, and the dunning grace period starts. The Celery worker will retry daily.
 
 ---
 
