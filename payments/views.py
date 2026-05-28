@@ -252,7 +252,7 @@ def _handle_failed_charge(subscription, payment_order):
                 f"We will automatically retry for the next 4 days.\n\n"
                 f"If retries fail, your account will move to the Free plan. "
                 f"You can also resubscribe manually from the pricing page.\n\n"
-                f"Team Vertext"
+                f"The Team"
             ),
             from_email=django_settings.DEFAULT_FROM_EMAIL,
             recipient_list=[subscription.user.email],

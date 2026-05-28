@@ -148,14 +148,14 @@ python manage.py runserver
 
 ```bash
 source venv/bin/activate
-celery -A payhere_vertext worker -l info
+celery -A config worker -l info
 ```
 
 **Terminal 3 — Celery Beat (schedules the jobs)**
 
 ```bash
 source venv/bin/activate
-celery -A payhere_vertext beat -l info
+celery -A config beat -l info
 ```
 
 The API is available at `http://localhost:8000/api/`.
