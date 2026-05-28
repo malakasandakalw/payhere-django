@@ -1,14 +1,14 @@
 # Local Development Setup
 
-This guide is for developers who want to run the project locally using a local PostgreSQL database.
+Guide for running this project locally with a local PostgreSQL database.
 
 ---
 
 ## Prerequisites
 
 - Python 3.11+
-- PostgreSQL installed and running locally
-- Redis installed and running locally (or use [Upstash](https://upstash.com) free tier)
+- PostgreSQL running locally
+- Redis running locally (or use [Upstash](https://upstash.com) free tier)
 - [ngrok](https://ngrok.com) for PayHere notify URL
 
 ---
@@ -63,83 +63,34 @@ PAYHERE_RETURN_URL=http://localhost:4200/payment/return
 PAYHERE_CANCEL_URL=http://localhost:4200/payment/cancel
 ```
 
-> **Note on REDIS_URL:** If using local Redis, use `redis://` (single s). If using Upstash, use `rediss://` (double s) with your Upstash credentials.
+> **Note on REDIS_URL:** Local Redis uses `redis://` (single s). Upstash uses `rediss://` (double s).
 
 ---
 
 ## 4. Run migrations
 
-This creates all database tables and automatically seeds all 6 subscription plans (Free, Pro Monthly, Pro Annual, Enterprise Monthly, Enterprise Annual, Test Daily) — no separate command needed for plans.
+Creates all tables and seeds all 6 plans automatically.
 
 ```bash
 python manage.py migrate
-```
-
-After this completes, verify the plans were seeded by calling `GET /api/plans/` or checking the `payments_plan` table in your database. If plans are missing for any reason, load them manually:
-
-```bash
-python manage.py loaddata local-setup/fixtures/plans.json
 ```
 
 ---
 
 ## 5. Troubleshooting: payments tables not created
 
-If after running `migrate` the `payments_*` tables are missing from your database, it means Django has stale migration records from a previous setup. Fix it by clearing those records and re-running the payments migrations:
+If the `payments_*` tables are missing after migrate, clear stale migration records and re-run:
 
 ```bash
-# Step 1 — remove stale payments migration records
 python manage.py dbshell -- -c "DELETE FROM django_migrations WHERE app = 'payments';"
-
-# Step 2 — apply all payments migrations fresh
 python manage.py migrate payments
 ```
 
-This will properly create all tables and seed the plans.
-
 ---
 
-## 6. Create a superuser (for Django admin)
+## 6. Run the app
 
-```bash
-python manage.py createsuperuser
-```
-
-Visit `http://localhost:8000/admin/` to manage users, plans, subscriptions, and transactions.
-
----
-
-## 7. User data — pick your case
-
-### Case A: Your database already has users
-
-Skip this step entirely — your existing users are untouched by the migrations. Use `GET /api/users/` to find the user IDs to pass in API calls.
-
----
-
-### Case B: Fresh database with no users (load test users)
-
-If your database has no users yet, load the sample fixture:
-
-```bash
-python manage.py loaddata local-setup/fixtures/users.json
-```
-
-All three test users have the same password: **`testpass123`**
-
-| ID | Username | Email             |
-|----|----------|-------------------|
-| 1  | alice    | alice@example.com |
-| 2  | bob      | bob@example.com   |
-| 3  | carol    | carol@example.com |
-
-> These users have no login/auth in the API — `user_id` is passed directly in requests. The password is only needed if you want to log in to the Django admin panel.
-
----
-
-## 8. Run the app
-
-You need three terminals running at the same time.
+Three terminals required.
 
 **Terminal 1 — Django**
 ```bash
@@ -159,39 +110,32 @@ source venv/bin/activate
 celery -A config beat -l info
 ```
 
-The API is now available at `http://localhost:8000/api/`.
+API available at `http://localhost:8000/api/`.
 
 ---
 
-## 9. Set up ngrok (for PayHere notify callback)
+## 7. Set up ngrok
 
-PayHere needs a public URL to POST payment results. Start ngrok and update your `.env`:
+PayHere requires a public URL for payment callbacks. Start ngrok and update `.env`:
 
 ```bash
 ngrok http 8000
 ```
 
-Copy the `https://` URL and set it in `.env`:
-
 ```
 PAYHERE_NOTIFY_URL=https://abc123.ngrok-free.app/api/payments/notify/
 ```
 
-Then restart the Django server. The ngrok URL changes every session — update `.env` each time.
+Restart Django after updating. The ngrok URL changes every session.
 
 ---
 
 ## Quick test
 
-Once everything is running, verify the API is working:
-
 ```bash
-# List users
-curl http://localhost:8000/api/users/
-
 # List plans
 curl http://localhost:8000/api/plans/
 
-# Get subscription for user 1
+# Get subscription for a user
 curl http://localhost:8000/api/subscriptions/me/?user_id=1
 ```
