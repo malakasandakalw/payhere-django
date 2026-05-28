@@ -140,7 +140,8 @@ CACHES = {
 
 # Celery
 CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
+# Newer Celery requires ssl_cert_reqs as a URL param on the result backend
+CELERY_RESULT_BACKEND = REDIS_URL + '?ssl_cert_reqs=CERT_NONE' if REDIS_URL else REDIS_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
