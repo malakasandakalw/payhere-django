@@ -85,9 +85,7 @@ python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 
 # 3. Install dependencies
-pip install django djangorestframework psycopg2-binary dj-database-url \
-    python-dotenv requests python-dateutil django-redis celery \
-    redis djangorestframework
+pip install -r requirements.txt
 
 # 4. Copy the environment file and fill in your values
 cp .env.example .env
