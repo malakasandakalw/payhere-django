@@ -97,7 +97,7 @@
       "payhere_recurrence": "1 Day",
       "payhere_duration": "Forever",
       "features": { "max_users": 10, "storage_gb": 50, "api_calls": 10000 },
-      "is_active": false,
+      "is_active": true,
       "created_at": "2026-01-01T00:00:00Z"
     }
   }
