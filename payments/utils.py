@@ -32,3 +32,15 @@ def cancel_payhere_subscription(payhere_subscription_id):
     )
     response.raise_for_status()
     return response.json()
+
+
+def retry_payhere_subscription(payhere_subscription_id):
+    token = get_payhere_token()
+    response = http_requests.post(
+        f"{settings.PAYHERE_BASE_URL}/merchant/v1/subscription/retry",
+        json={'subscription_id': payhere_subscription_id},
+        headers={'Authorization': f'Bearer {token}'},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()

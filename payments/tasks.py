@@ -6,7 +6,7 @@ from django.core.mail import send_mail
 from django.utils.timezone import now
 
 from .models import Plan, Subscription
-from .utils import cancel_payhere_subscription
+from .utils import cancel_payhere_subscription, retry_payhere_subscription
 
 
 @shared_task
@@ -165,3 +165,60 @@ def alert_failed_subscriptions():
         count += 1
 
     return f'{count} failed subscription alert(s) sent'
+
+
+@shared_task
+def process_dunning_retries():
+    """
+    Runs daily at 10am.
+    For every failed subscription still within the grace period:
+      - Calls PayHere retry API
+      - If PayHere accepts the retry, increments retry_count and waits for notify_url result
+      - If grace period has expired, moves user to Free plan and sends final email
+    Note: The actual success/failure of the retry charge comes back via notify_url callback.
+    """
+    free_plan = Plan.objects.get(tier='free')
+    subscriptions = Subscription.objects.filter(
+        status='failed',
+        grace_period_end__isnull=False,
+    ).select_related('user', 'plan')
+
+    retried = 0
+    expired = 0
+
+    for subscription in subscriptions:
+        if now() > subscription.grace_period_end:
+            subscription.status = 'expired'
+            subscription.plan = free_plan
+            subscription.grace_period_end = None
+            subscription.retry_count = 0
+            subscription.save()
+            send_mail(
+                subject='Your subscription has been cancelled due to payment failure',
+                message=(
+                    f"Hi {subscription.user.first_name},\n\n"
+                    f"We tried to charge your card for {subscription.plan.name} several times "
+                    f"but were unable to process the payment.\n\n"
+                    f"Your account has been moved to the Free plan.\n\n"
+                    f"To resubscribe, visit the pricing page and complete a new payment.\n\n"
+                    f"Team Vertext"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[subscription.user.email],
+                fail_silently=True,
+            )
+            expired += 1
+            continue
+
+        if not subscription.payhere_subscription_id:
+            continue
+
+        try:
+            retry_payhere_subscription(subscription.payhere_subscription_id)
+            subscription.retry_count += 1
+            subscription.save()
+            retried += 1
+        except Exception:
+            pass
+
+    return f'{retried} retry attempt(s) made, {expired} subscription(s) expired after grace period'

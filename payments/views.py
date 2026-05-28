@@ -187,9 +187,28 @@ def _activate_subscription(user, plan, payment_order, transaction, payhere_subsc
 
 
 def _handle_failed_charge(subscription, payment_order):
+    from datetime import timedelta
     if subscription:
         subscription.status = 'failed'
+        subscription.grace_period_end = now() + timedelta(days=4)
+        subscription.retry_count = 0
         subscription.save()
+        from django.core.mail import send_mail
+        from django.conf import settings as django_settings
+        send_mail(
+            subject='Action required: Your payment failed',
+            message=(
+                f"Hi {subscription.user.first_name},\n\n"
+                f"Your payment for {subscription.plan.name} failed. "
+                f"We will automatically retry for the next 4 days.\n\n"
+                f"If retries fail, your account will move to the Free plan. "
+                f"You can also resubscribe manually from the pricing page.\n\n"
+                f"Team Vertext"
+            ),
+            from_email=django_settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[subscription.user.email],
+            fail_silently=True,
+        )
     if payment_order:
         payment_order.status = 'failed'
         payment_order.save()

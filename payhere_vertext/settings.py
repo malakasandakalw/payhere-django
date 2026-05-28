@@ -172,6 +172,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'payments.tasks.alert_failed_subscriptions',
         'schedule': crontab(hour=9, minute=5),
     },
+    'process-dunning-retries': {
+        'task': 'payments.tasks.process_dunning_retries',
+        'schedule': crontab(hour=10, minute=0),
+    },
 }
 
 # PayHere

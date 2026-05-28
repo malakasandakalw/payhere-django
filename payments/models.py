@@ -45,6 +45,8 @@ class Subscription(models.Model):
     current_period_end = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancel_at_period_end = models.BooleanField(default=False)
+    grace_period_end = models.DateTimeField(null=True, blank=True)
+    retry_count = models.SmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

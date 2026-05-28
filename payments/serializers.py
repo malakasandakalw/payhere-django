@@ -29,6 +29,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'id', 'plan', 'pending_plan', 'status',
             'started_at', 'current_period_start', 'current_period_end',
             'cancelled_at', 'cancel_at_period_end',
+            'grace_period_end', 'retry_count',
         ]
 
 
